@@ -3,11 +3,12 @@ package relay
 import (
 	"bytes"
 	"fmt"
-	"github.com/streadway/amqp"
 	"log"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/streadway/amqp"
 )
 
 // Publisher is a type that is used only for publishing messages to a single queue.
@@ -26,8 +27,8 @@ type Publisher struct {
 	l           sync.Mutex
 }
 
-// Publish will send the message to the server to be consumed
-func (p *Publisher) Publish(in interface{}) error {
+// PublishWithProperties will send the message to the server with given amqp Properties
+func (p *Publisher) PublishWithProperties(in interface{}, props Properties) error {
 	// Check for close
 	if p.channel == nil {
 		return ChannelClosed
@@ -50,6 +51,14 @@ func (p *Publisher) Publish(in interface{}) error {
 		Timestamp:    time.Now().UTC(),
 		ContentType:  p.contentType,
 		Body:         buf.Bytes(),
+
+		Headers:       amqp.Table(props.Headers),
+		CorrelationId: props.CorrelationId,
+		ReplyTo:       props.ReplyTo,
+		Type:          props.Type,
+		MessageId:     props.MessageId,
+		UserId:        props.UserId,
+		AppId:         props.AppId,
 	}
 
 	// Check for a message ttl
@@ -86,6 +95,11 @@ func (p *Publisher) Publish(in interface{}) error {
 		}
 	}
 	return nil
+}
+
+// Publish will send the message to the server to be consumed
+func (p *Publisher) Publish(in interface{}) error {
+	return p.PublishWithProperties(in, Properties{})
 }
 
 // Close will shutdown the publisher

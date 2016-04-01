@@ -926,3 +926,63 @@ func TestPublisherThreadSafety(t *testing.T) {
 		cons.Ack()
 	}
 }
+
+func TestDeliveryProperties(t *testing.T) {
+	CheckInteg(t)
+
+	// Make a random tests queue name
+	queueName, err := uuid.GenerateUUID()
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	rand.Seed(time.Now().UnixNano())
+
+	conf := Config{Addr: AMQPHost()}
+	r, err := New(&conf)
+	if err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
+	defer r.Close()
+
+	// Get a publisher
+	pub, err := r.Publisher(queueName)
+	if err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
+	defer pub.Close()
+
+	// Get a consumer
+	cons, err := r.Consumer(queueName)
+	if err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
+	defer cons.Close()
+
+	message := "the quick brown tiny little fox jumps over the lazy dog"
+	correlationId, err := uuid.GenerateUUID()
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+
+	props := Properties{
+		CorrelationId: correlationId,
+		Type:          "forest",
+	}
+
+	err = pub.PublishWithProperties(message, props)
+	if err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
+
+	delivery, err := cons.Deliver()
+	if err != nil {
+		t.Fatalf("unexpected err %s", err)
+	}
+	defer delivery.Ack()
+	receivedProps := delivery.Properties()
+	if ok := reflect.DeepEqual(*receivedProps, props); !ok {
+		t.Fatalf("expected props %+v, got %+v", props, receivedProps)
+	}
+
+}
